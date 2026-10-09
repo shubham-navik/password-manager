@@ -58,3 +58,29 @@ async def revoke_session(
     await db.commit()
 
     return True
+
+async def revoke_all_user_sessions(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[str]:
+    result = await db.execute(
+        select(Session).where(
+            Session.user_id == user_id,
+            Session.revoked_at.is_(None),
+        )
+    )
+
+    sessions = result.scalars().all()
+
+    session_identifiers = [
+        session.session_identifier for session in sessions
+    ]
+
+    revoked_at = datetime.now(timezone.utc)
+
+    for session in sessions:
+        session.revoked_at = revoked_at
+
+    await db.commit()
+
+    return session_identifiers    
