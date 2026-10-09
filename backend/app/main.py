@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.vault import router as vault_router
 from app.core.database import get_db
 
 
@@ -13,6 +14,7 @@ app = FastAPI(
 
 
 app.include_router(auth_router)
+app.include_router(vault_router)
 
 
 @app.get("/")
