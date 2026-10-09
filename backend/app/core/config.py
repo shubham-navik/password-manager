@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     REDIS_URL: str
 
     SESSION_TTL_SECONDS:int =43200 # 12 hours in seconds
-
+    VAULT_ENCRYPTION_KEY: str
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
