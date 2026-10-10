@@ -16,6 +16,9 @@ cryptography
 
 httpx
 pytest
+pytest-cov
 pytest-asyncio
 
 email-validator
+
+locust
