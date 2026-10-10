@@ -1,5 +1,6 @@
 from fastapi import HTTPException, Request, status
 
+from app.core.config import settings
 from app.core.redis import redis_client
 
 
@@ -19,8 +20,11 @@ return {current, ttl}
 async def check_rate_limit(
     key: str,
     limit: int,
-    window_seconds: int = 60,
+    window_seconds: int,
 ) -> None:
+    if not settings.RATE_LIMIT_ENABLED:
+        return
+
     try:
         result = await redis_client.eval(
             RATE_LIMIT_SCRIPT,

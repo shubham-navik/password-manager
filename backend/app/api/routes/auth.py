@@ -7,7 +7,7 @@ from app.services.auth_service import register_user ,login_user
 from app.services.session_service import logout_user, logout_all_user_sessions
 from app.api.dependencies import get_current_user
 
-from app.api.rate_limit_dependencies import rate_limit_by_ip
+from app.api.rate_limit_dependencies import limit_login_by_ip, limit_register_by_ip
 
 router = APIRouter(
     prefix="/auth",
@@ -28,15 +28,7 @@ async def get_me(
     "/register",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[
-        Depends(
-            rate_limit_by_ip(
-                limit=5,
-                window_seconds=60,
-                scope="register",
-            )
-        )
-    ],
+    dependencies=[Depends(limit_register_by_ip)],
 )
 async def register(
     request: RegisterRequest,
@@ -54,15 +46,7 @@ async def register(
 @router.post(
     "/login",
     response_model=UserResponse,
-    dependencies=[
-        Depends(
-            rate_limit_by_ip(
-                limit=5,
-                window_seconds=60,
-                scope="login",
-            )
-        )
-    ],
+    dependencies=[Depends(limit_login_by_ip)],
 )
 async def login(
     request: LoginRequest,

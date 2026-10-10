@@ -1,6 +1,7 @@
 from fastapi import Depends, Request
 
 from app.api.dependencies import get_current_user
+from app.core.config import settings
 from app.core.rate_limiter import (
     check_rate_limit,
     get_client_identifier,
@@ -8,30 +9,23 @@ from app.core.rate_limiter import (
 from app.models.user import User
 
 
-def rate_limit_by_ip(
-    limit: int,
-    window_seconds: int = 60,
-    scope: str = "global",
-):
-    async def dependency(request: Request) -> None:
-        client_id = get_client_identifier(request)
-
-        await check_rate_limit(
-            key=f"rate_limit:ip:{scope}:{client_id}",
-            limit=limit,
-            window_seconds=window_seconds,
-        )
-
-    return dependency
-
-
-async def limit_by_ip(request: Request) -> None:
+async def limit_login_by_ip(request: Request) -> None:
     client_id = get_client_identifier(request)
 
     await check_rate_limit(
-        key=f"rate_limit:ip:{client_id}",
-        limit=60,
-        window_seconds=60,
+        key=f"rate_limit:ip:login:{client_id}",
+        limit=settings.RATE_LIMIT_LOGIN_LIMIT,
+        window_seconds=settings.RATE_LIMIT_LOGIN_WINDOW_SECONDS,
+    )
+
+
+async def limit_register_by_ip(request: Request) -> None:
+    client_id = get_client_identifier(request)
+
+    await check_rate_limit(
+        key=f"rate_limit:ip:register:{client_id}",
+        limit=settings.RATE_LIMIT_REGISTER_LIMIT,
+        window_seconds=settings.RATE_LIMIT_REGISTER_WINDOW_SECONDS,
     )
 
 
@@ -40,6 +34,6 @@ async def limit_by_user(
 ) -> None:
     await check_rate_limit(
         key=f"rate_limit:user:{current_user.id}",
-        limit=60,
-        window_seconds=60,
+        limit=settings.RATE_LIMIT_USER_LIMIT,
+        window_seconds=settings.RATE_LIMIT_USER_WINDOW_SECONDS,
     )

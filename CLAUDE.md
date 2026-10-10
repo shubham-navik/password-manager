@@ -30,9 +30,9 @@ docker compose up -d
 .venv/bin/python -m pytest backend/tests/test_rate_limiter.py::test_request_over_limit_returns_429
 ```
 
-There is no pytest config or conftest. Pytest's rootdir-based sys.path insertion makes `import app` work. Tests mock Redis (`patch("app.core.rate_limiter.redis_client.eval", ...)`) or only exercise unauthenticated and crypto paths, so the current suite doesn't need live Postgres or Redis. It still needs a valid `.env`, because `app.core.config.settings` is built at import time. `backend/test_encryption.py` is a stray test outside `backend/tests/`.
+There is no pytest config. Pytest's rootdir-based sys.path insertion makes `import app` work. `backend/tests/conftest.py` has an autouse fixture that forces `settings.RATE_LIMIT_ENABLED = True`, so a local `.env` that disables rate limiting doesn't change test results. Tests change limits by monkeypatching the `settings` singleton, which is read on every request. Tests mock Redis (`patch("app.core.rate_limiter.redis_client.eval", ...)`) or only exercise unauthenticated and crypto paths, so the current suite doesn't need live Postgres or Redis. It still needs a valid `.env`, because `app.core.config.settings` is built at import time. `backend/test_encryption.py` is a stray test outside `backend/tests/`.
 
-Required env vars: `DATABASE_URL` (must use `postgresql+asyncpg://`), `REDIS_URL` and `VAULT_ENCRYPTION_KEY`. `.env.example` doesn't include `VAULT_ENCRYPTION_KEY` yet. It must be URL-safe base64 that decodes to exactly 32 bytes:
+Required env vars: `DATABASE_URL` (must use `postgresql+asyncpg://`), `REDIS_URL` and `VAULT_ENCRYPTION_KEY`. Rate-limit settings (`RATE_LIMIT_*`) have defaults and are documented in `.env.example` and README.md. `VAULT_ENCRYPTION_KEY` must be URL-safe base64 that decodes to exactly 32 bytes:
 `python -c "import base64,secrets;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"`
 
 ## Architecture
@@ -43,7 +43,7 @@ The app is fully async and layered: `api/routes` → `services` → `repositorie
 
 **Vault encryption.** `security/encryption.py` uses AES-256-GCM with one server-wide key (`VAULT_ENCRYPTION_KEY`). The stored format is `nonce(12 bytes) || ciphertext+tag`, kept in `LargeBinary` columns (`encrypted_password`, `encrypted_notes`). Encryption and decryption happen only in `VaultService`. `_to_detail` decrypts for single-item responses, and list responses (`VaultItemSummary`) never decrypt. PATCH uses `model_dump(exclude_unset=True)`, maps `password`/`notes` onto the encrypted columns, and rejects an explicit `null` for `title` or `password`. Every vault query is scoped by `user_id` as well as `item_id`.
 
-**Rate limiting.** `core/rate_limiter.check_rate_limit` runs an atomic Lua INCR+EXPIRE fixed-window script in Redis. It returns 429 with `Retry-After`, or 503 if Redis is unreachable. `api/rate_limit_dependencies.py` provides `rate_limit_by_ip(limit, window, scope)` (a dependency factory used on `/auth/register` and `/auth/login` at 5/min) and `limit_by_user`, which is attached at router level to the whole vault router at 60/min and depends on `get_current_user`.
+**Rate limiting.** `core/rate_limiter.check_rate_limit` runs an atomic Lua INCR+EXPIRE fixed-window script in Redis. It returns 429 with `Retry-After`, or 503 if Redis is unreachable. If `RATE_LIMIT_ENABLED` is false, it returns before touching Redis. `api/rate_limit_dependencies.py` provides `limit_login_by_ip`, `limit_register_by_ip` and `limit_by_user`. `limit_by_user` is attached at router level to the whole vault router and depends on `get_current_user`. All limits and windows come from `RATE_LIMIT_*` in `core/config.py`, validated as `> 0`. Never put literal limits in route files. Add a setting and a named dependency instead. Redis keys are `rate_limit:ip:<scope>:<ip>` and `rate_limit:user:<id>`.
 
 **Routes.** `/auth/*` (register, login, me, logout, logout-all) and `/api/v1/vault` (CRUD). `main.py` also exposes `/health` and `/health/db`.
 
